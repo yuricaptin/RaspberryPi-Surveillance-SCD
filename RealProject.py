@@ -225,7 +225,7 @@ def make_siamese_model():
 
     siamese_layer = L1Dist()
     siamese_layer._name = 'distance'
-    distances = siamese_layer(embussy())
+    distances = siamese_layer(embussy(input_image), embussy(validation_image))
 
     #Classification Layer
     classifier = Dense(1, activation='sigmoid')(distances)
@@ -235,3 +235,5 @@ def make_siamese_model():
 siamese_network = Model(inputs=[input_image, validation_image], outputs=classifier, name='SiameseNetwork')
 print(siamese_network)
 siamese_network.summary()
+
+siamese_model = make_siamese_model()
