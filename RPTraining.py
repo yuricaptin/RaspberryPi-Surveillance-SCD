@@ -5,8 +5,10 @@ import matplotlib as plt
 import numpy as np
 import random
 import RealProject
+import utils
 from RealProject import *
 from keras.metrics import Precision, Recall
+from sklearn.metrics import confusion_matrix
 
 #This py is for training the model
 #Loss and Optimizer
@@ -70,7 +72,7 @@ def train(data, EPOCHS):
         if epoch % 10 == 0:
             checkpoint.save(file_prefix=checkpoint_prefix)
 
-EPOCHS = 50
+EPOCHS = 10
 
 train(train_data, EPOCHS)
 
@@ -78,7 +80,7 @@ test_input, test_val, y_true = test_data.as_numpy_iterator().next()
 
 y_hat = siamese_model.predict([test_input, test_val])
 
-[1 if prediction > 0.5 else 0 for prediction in y_hat]
+[1 if prediction > 0.8 else 0 for prediction in y_hat]
 
 print(y_true)
 
@@ -106,10 +108,10 @@ print(r.result().numpy(), p.result().numpy())
 plt.figure(figsize=(10,8))
 
 plt.subplot(1,2,1)
-plt.imshow(test_input[0])
+plt.imshow(test_input[1])
 
 plt.subplot(1,2,2)
-plt.imshow(test_val[0])
+plt.imshow(test_val[1])
 
 plt.show()
 
@@ -121,4 +123,7 @@ L1Dist
 siamese_model = tf.keras.models.load_model('siamesemodelv2.h5', custom_objects = {'L1Dist':L1Dist, 'BinaryCrossentropy':tf.losses.BinaryCrossentropy})
 
 #Viewing the model summary
-siamese_model.summary()
+t1 = siamese_model.summary()
+print(t1)
+
+tp,fp,fn=utils.plot_confusion_matrix_from_data(y_hat,y_true,fz=18, figsize=(20,20), lw=0.5)
