@@ -3,6 +3,7 @@ import cv2
 import os
 import random
 import stat
+import uuid
 import numpy as np
 import matplotlib.pyplot as plt
 import tensorflow as tf
@@ -38,9 +39,9 @@ pathways = 'C:/Users/lyork/source/repos/RealProject/lfw'
         #os.replace(EX_PATH, 'C:/Users/lyork/source/repos/RealProject/RealProject/Image')
 
 
-anchor = tf.data.Dataset.list_files(ANC_PATH+'\*.jpg').take(24)
-negative = tf.data.Dataset.list_files(NEG_PATH+'\*.jpg').take(24)
-positive = tf.data.Dataset.list_files(POS_PATH+'\*.jpg').take(24)
+anchor = tf.data.Dataset.list_files(ANC_PATH+'\*.jpg').take(30)
+negative = tf.data.Dataset.list_files(NEG_PATH+'\*.jpg').take(15)
+positive = tf.data.Dataset.list_files(POS_PATH+'\*.jpg').take(30)
 
 ANC_PATH+'\*.jpg'
 
@@ -53,7 +54,7 @@ print(dir_test.next())
 def preprocess(file_path):
     byte_img = tf.io.read_file(file_path)
     img = tf.io.decode_jpeg(byte_img)
-    img = tf.image.resize(img, (120,120))
+    img = tf.image.resize(img, (100,100))
     img = img / 255.0
     return img
 
@@ -61,6 +62,7 @@ img = preprocess('Image\\anchor\\Austin3.jpg')
 print(img.numpy().min())
 plt.imshow(img)
 
+'''
 def data_aug(img):
     data = []
     for i in range(9):
@@ -75,6 +77,22 @@ def data_aug(img):
     
     return data
 
+for file_name in os.listdir(os.path.join(ANC_PATH)):
+    img_path = os.path.join(ANC_PATH, file_name)
+    img = cv2.imread(img_path)
+    augmentated_images = data_aug(img)
+
+    for image in augmentated_images:
+        cv2.imwrite(os.path.join(ANC_PATH, '{}.jpg'.format(uuid.uuid1())), image.numpy())
+
+for file_names in os.listdir(os.path.join(POS_PATH)):
+    img_paths = os.path.join(POS_PATH, file_names)
+    img = cv2.imread(img_paths)
+    augmented_images = data_aug(img)
+
+    for images in augmented_images:
+        cv2.imwrite(os.path.join(POS_PATH, '{}.jpg'.format(uuid.uuid1())), image.numpy())
+'''
 #dataset.map(preprocess)
 
 #Creation of the labelled dataset
@@ -102,7 +120,7 @@ print(res[2])
 #Build the pipeline
 data = data.map(preprocess_twin)
 data = data.cache()
-data = data.shuffle(buffer_size=1024)
+data = data.shuffle(buffer_size=10000)
 
 #Prints out anchor image as well as the positive image
 #VSCode never shows the plt so i will never see what the glorious photos are
@@ -120,8 +138,8 @@ plt.imshow(yooo[1])
 
 print(round(len(data)*.7))
 
-train_data = data.take(round(len(data)*.7))
-train_data = train_data.batch(12)
+train_data = data.take(round(len(data)*.5))
+train_data = train_data.batch(16)
 train_data = train_data.prefetch(8)
 
 train_samples = train_data.as_numpy_iterator()
@@ -136,9 +154,9 @@ print(train_data)
 print(len(train_sample[0]))
 
 # Gonna do the testing partition now
-test_data = data.skip(round(len(data)*.7))
-test_data = test_data.take(round(len(data)*.3))
-test_data = test_data.batch(12)
+test_data = data.skip(round(len(data)*.5))
+test_data = test_data.take(round(len(data)*.4))
+test_data = test_data.batch(16)
 test_data = test_data.prefetch(8)
 
 
@@ -149,28 +167,12 @@ test_data = test_data.prefetch(8)
 #L1 Distance Layer creation
 #Compilation of the Siamese Network
 
-inp = Input(shape=(120,120,3), name ='input_image')
-print(inp)
-
-#First Block
-c1 = Conv2D(64, (10,10), activation='relu')(inp)
-m1 = MaxPooling2D(64, (2,2), padding='same')(c1)
-
-c2 = Conv2D(128, (7,7), activation='relu')(m1)
-m2 = MaxPooling2D(64, (2,2), padding='same')(c2)
-
-c3 = Conv2D(128, (4,4), activation='relu')(m2)
-m3 = MaxPooling2D(64, (2,2), padding='same')(c3)
-
-    #Final FORM!
-c4 = Conv2D(256, (4,4), activation='relu')(m3)
-f1 = Flatten()(c4)
-d1 = Dense(4096, activation='sigmoid')(f1)
 
 
-#Building the embussy layer
-def make_embussy():
-    inp = Input(shape=(120,120,3), name='input_image')
+
+#Building the embedding layer
+def make_embedding():
+    inp = Input(shape=(100,100,3), name='input_image')
 
     #First Block
     c1 = Conv2D(64, (10,10), activation='relu')(inp)
@@ -192,12 +194,9 @@ def make_embussy():
 
     return Model(inputs=[inp], outputs=[d1], name='embedding')
 
-mod = Model(inputs=[inp], outputs=[d1], name='embedding')
-print(mod)
+embedding = make_embedding()
 
-embussy = make_embussy()
-
-embussy.summary()
+embedding.summary()
 
 #Building the Distance Layer
 
@@ -211,43 +210,28 @@ class L1Dist(Layer):
 
 l1 = L1Dist()
 
-input_image = Input(name='input_img', shape=(120,120,3))
-validation_image = Input(name='validation_img', shape=(120,120,3))
 
-inp_embussy = embussy(input_image)
-val_embussy = embussy(validation_image)
-
-print(val_embussy)
-print(embussy(input_image))
-embussy(input_image)
 
 siamese_layer = L1Dist()
 
-print(siamese_layer(inp_embussy, val_embussy))
 
-distances = siamese_layer(inp_embussy, val_embussy)
-
-classifier = Dense(1, activation='sigmoid')(distances)
-
-print(classifier)
-
-def make_siamese_model():
-
-    input_image = Input(name='input_img', shape=(120,120,3))
+def make_siamese_model(): 
     
-    validation_image = Input(name='validation_img', shape=(120,120,3))
-
+    # Anchor image input in the network
+    input_image = Input(name='input_img', shape=(100,100,3))
+    
+    # Validation image in the network 
+    validation_image = Input(name='validation_img', shape=(100,100,3))
+    
+    # Combine siamese distance components
     siamese_layer = L1Dist()
     siamese_layer._name = 'distance'
-    distances = siamese_layer(embussy(input_image), embussy(validation_image))
-
-    #Classification Layer
+    distances = siamese_layer(embedding(input_image), embedding(validation_image))
+    
+    # Classification layer 
     classifier = Dense(1, activation='sigmoid')(distances)
-
+    
     return Model(inputs=[input_image, validation_image], outputs=classifier, name='SiameseNetwork')
 
-siamese_network = Model(inputs=[input_image, validation_image], outputs=classifier, name='SiameseNetwork')
-print(siamese_network)
-siamese_network.summary()
-
 siamese_model = make_siamese_model()
+siamese_model.summary()

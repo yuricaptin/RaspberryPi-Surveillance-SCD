@@ -26,7 +26,7 @@ test_batch = train_data.as_numpy_iterator()
 batch_1 = test_batch.next()
 print(len(batch_1))
 
-
+EPOCHS = 10
 
 @tf.function
 def train_step(batch):
@@ -34,8 +34,9 @@ def train_step(batch):
     #automatic recording of the inside of the neural network
     with tf.GradientTape() as tape:
 
+        #Get anchot and positive/negative image
         X = batch[:2]
-        
+        #Getting Label
         y = batch[2]
 
         yhat = siamese_model(X, training=True)
@@ -72,7 +73,7 @@ def train(data, EPOCHS):
         if epoch % 10 == 0:
             checkpoint.save(file_prefix=checkpoint_prefix)
 
-EPOCHS = 10
+
 
 train(train_data, EPOCHS)
 
@@ -91,9 +92,9 @@ m.result().numpy()
 
 
 #Creation of the metric object
-m = Precision()
-m.update_state(y_true, y_hat)
-m.result().numpy()
+n = Precision()
+n.update_state(y_true, y_hat)
+n.result().numpy()
 
 r = Recall()
 p = Precision()
@@ -103,8 +104,22 @@ for test_input, test_val, y_true in test_data.as_numpy_iterator():
     r.update_state(y_true, yhat)
     p.update_state(y_true, yhat)
 
+
+
 print(r.result().numpy(), p.result().numpy())
 
+#Saving the weights (Update the weights also works)
+siamese_model.save('siamesemodelv2.h5')
+L1Dist
+
+#Reloading of the siamese model
+siamese_model = tf.keras.models.load_model('siamesemodelv2.h5', custom_objects = {'L1Dist':L1Dist, 'BinaryCrossentropy':tf.losses.BinaryCrossentropy})
+
+
+siamese_model.predict([test_input, test_val])
+#Viewing the model summary
+t1 = siamese_model.summary()
+print(t1)
 plt.figure(figsize=(10,8))
 
 plt.subplot(1,2,1)
@@ -115,15 +130,53 @@ plt.imshow(test_val[1])
 
 plt.show()
 
-#Saving the weights (Update the weights also works)
-siamese_model.save('siamesemodelv2.h5')
-L1Dist
 
-#Reloading of the siamese model
-siamese_model = tf.keras.models.load_model('siamesemodelv2.h5', custom_objects = {'L1Dist':L1Dist, 'BinaryCrossentropy':tf.losses.BinaryCrossentropy})
+#tp,fp,fn=utils.plot_confusion_matrix_from_data(y_hat,y_true,fz=18, figsize=(20,20), lw=0.5)
 
-#Viewing the model summary
-t1 = siamese_model.summary()
-print(t1)
+os.listdir(os.path.join('app_data', 'verify_image'))
+os.path.join('app_data', 'input_image', 'input_image.jpg')
 
-tp,fp,fn=utils.plot_confusion_matrix_from_data(y_hat,y_true,fz=18, figsize=(20,20), lw=0.5)
+for image in os.listdir(os.path.join('app_data', 'verify_image')):
+    validation_img = os.path.join('app_data', 'verify_image', image )
+    print(validation_img)
+
+def verify(model, detection_threshold, verification_threshold):
+    # Build results array
+    results = []
+    for image in os.listdir(os.path.join('app_data', 'verify_image')):
+        input_img = preprocess(os.path.join('app_data', 'input_image', 'input_image.jpg'))
+        validation_img = preprocess(os.path.join('app_data', 'verify_image', image))
+        
+        # Make Predictions 
+        result = model.predict(list(np.expand_dims([input_img, validation_img], axis=1)))
+        results.append(result)
+    
+    # Detection Threshold: Metric above which a prediciton is considered positive 
+    detection = np.sum(np.array(results) > detection_threshold)
+    
+    # Verification Threshold: Proportion of positive predictions / total positive samples 
+    verification = detection / len(os.listdir(os.path.join('app_data', 'verify_image'))) 
+    verified = verification > verification_threshold
+    
+    return results, verified
+
+#OPEN CV INCOMING
+cap = cv2.VideoCapture(0)
+while cap.isOpened():
+    ret, frame = cap.read()
+    frame = frame[120:120+250,200:200+250, :]
+    
+    cv2.imshow('Verification', frame)
+    
+    if cv2.waitKey(10) & 0xFF == ord('v'):
+    #This part will be modified with the xml file for the haar cascade to detect then do the siamese model.
+
+        cv2.imwrite(os.path.join('app_data', 'input_image', 'input_image.jpg'), frame)
+        # Run verification
+        results, verified = verify(siamese_model, 0.5, 0.5)
+        print(verified)
+    
+    if cv2.waitKey(10) & 0xFF == ord('q'):
+        break
+cap.release()
+cv2.destroyAllWindows()
